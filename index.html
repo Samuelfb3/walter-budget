@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#1f6feb">
+<title>Walter's Project Budget</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  :root {
+    --blue: #1f6feb;
+    --blue-dark: #144a9e;
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1c1e21;
+    --muted: #6b7280;
+    --danger: #d64545;
+    --border: #e3e5e8;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 90px;
+  }
+  header {
+    background: var(--blue);
+    color: white;
+    padding: 18px 16px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  header .back {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 0 4px 0 0;
+    line-height: 1;
+  }
+  header .subtitle {
+    font-size: 0.85rem;
+    opacity: 0.9;
+    margin-top: 2px;
+  }
+  main {
+    padding: 16px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 58px;
+    height: 58px;
+    font-size: 1.8rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    cursor: pointer;
+    z-index: 20;
+  }
+  .fab:active { background: var(--blue-dark); }
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+  }
+  .project-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+  .project-card .info h3 {
+    margin: 0 0 4px;
+    font-size: 1.05rem;
+  }
+  .project-card .info .store {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .project-card .amount {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--blue);
+    text-align: right;
+    white-space: nowrap;
+    margin-left: 10px;
+  }
+  .project-card .amount .count {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 60px 20px;
+  }
+  .empty-state div.icon { font-size: 2.5rem; margin-bottom: 10px; }
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-row .details { flex: 1; min-width: 0; }
+  .item-row .details .name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item-row .details .meta {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .item-row .line-total {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .item-row .del-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 4px 2px;
+  }
+  .totals {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-top: 8px;
+  }
+  .totals .label { color: var(--muted); font-size: 0.9rem; }
+  .totals .value { font-size: 1.5rem; font-weight: 700; color: var(--blue); }
+  .section-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 20px 0 8px 4px;
+  }
+  /* modal */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: flex-end;
+    z-index: 30;
+  }
+  .overlay.hidden { display: none; }
+  .sheet {
+    background: var(--card);
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  .sheet h2 {
+    margin: 0 0 16px;
+    font-size: 1.15rem;
+  }
+  label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin: 12px 0 4px;
+  }
+  input, select {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #fafafa;
+  }
+  .row2 { display: flex; gap: 10px; }
+  .row2 > div { flex: 1; }
+  .sheet-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  button.primary {
+    flex: 1;
+    background: var(--blue);
+    color: white;
+    border: none;
+    padding: 13px;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary {
+    flex: 1;
+    background: #eef0f3;
+    color: var(--text);
+    border: none;
+    padding: 13px;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button.danger-text {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 8px 0;
+    display: block;
+    margin: 4px auto 0;
+  }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .icon-btn {
+    background: #eef0f3;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="headerTitle">
+    <button class="back" id="backBtn" style="display:none">&#8592;</button>
+    <span id="headerText">Walter's Projects</span>
+  </h1>
+  <div class="subtitle" id="headerSubtitle">Materials budget by store</div>
+</header>
+
+<main>
+  <div id="projectsView"></div>
+  <div id="projectDetailView" style="display:none"></div>
+</main>
+
+<button class="fab" id="fabBtn">+</button>
+
+<!-- New Project Sheet -->
+<div class="overlay hidden" id="projectOverlay">
+  <div class="sheet">
+    <h2>New Project</h2>
+    <label for="storeName">Store</label>
+    <input id="storeName" placeholder="e.g. Store #204 - Main St" autocomplete="off">
+    <label for="projName">Project name</label>
+    <input id="projName" placeholder="e.g. Walk-in cooler repair" autocomplete="off">
+    <div class="sheet-actions">
+      <button class="secondary" id="cancelProjectBtn">Cancel</button>
+      <button class="primary" id="saveProjectBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Item Sheet -->
+<div class="overlay hidden" id="itemOverlay">
+  <div class="sheet">
+    <h2>Add Material</h2>
+    <label for="itemName">Material</label>
+    <input id="itemName" placeholder="e.g. 2x4 lumber" autocomplete="off">
+    <div class="row2">
+      <div>
+        <label for="itemQty">Quantity</label>
+        <input id="itemQty" type="number" inputmode="decimal" min="0" step="any" placeholder="1">
+      </div>
+      <div>
+        <label for="itemPrice">Unit price ($)</label>
+        <input id="itemPrice" type="number" inputmode="decimal" min="0" step="any" placeholder="0.00">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="secondary" id="cancelItemBtn">Cancel</button>
+      <button class="primary" id="saveItemBtn">Add</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'walter_budget_projects_v1';
+
+function loadProjects() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+function saveProjects(projects) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+}
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+function money(n) {
+  return '$' + (Math.round(n * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function projectTotal(p) {
+  return p.items.reduce((sum, it) => sum + (it.qty * it.price), 0);
+}
+
+let projects = loadProjects();
+let currentProjectId = null;
+
+const projectsView = document.getElementById('projectsView');
+const projectDetailView = document.getElementById('projectDetailView');
+const headerText = document.getElementById('headerText');
+const headerSubtitle = document.getElementById('headerSubtitle');
+const backBtn = document.getElementById('backBtn');
+const fabBtn = document.getElementById('fabBtn');
+
+function render() {
+  if (currentProjectId) {
+    renderProjectDetail();
+  } else {
+    renderProjectsList();
+  }
+}
+
+function renderProjectsList() {
+  projectsView.style.display = '';
+  projectDetailView.style.display = 'none';
+  backBtn.style.display = 'none';
+  headerText.textContent = "Walter's Projects";
+  headerSubtitle.textContent = 'Materials budget by store';
+  fabBtn.onclick = openProjectSheet;
+
+  if (projects.length === 0) {
+    projectsView.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🧰</div>
+        <div>No projects yet.<br>Tap + to start budgeting your first job.</div>
+      </div>`;
+    return;
+  }
+
+  const sorted = [...projects].sort((a, b) => b.createdAt - a.createdAt);
+  projectsView.innerHTML = sorted.map(p => {
+    const total = projectTotal(p);
+    return `
+      <div class="card project-card" data-id="${p.id}">
+        <div class="info">
+          <h3>${escapeHtml(p.name)}</h3>
+          <div class="store">${escapeHtml(p.store)}</div>
+        </div>
+        <div class="amount">${money(total)}<span class="count">${p.items.length} item${p.items.length === 1 ? '' : 's'}</span></div>
+      </div>`;
+  }).join('');
+
+  projectsView.querySelectorAll('.project-card').forEach(el => {
+    el.addEventListener('click', () => {
+      currentProjectId = el.dataset.id;
+      render();
+    });
+  });
+}
+
+function renderProjectDetail() {
+  const p = projects.find(x => x.id === currentProjectId);
+  if (!p) { currentProjectId = null; render(); return; }
+
+  projectsView.style.display = 'none';
+  projectDetailView.style.display = '';
+  backBtn.style.display = '';
+  headerText.textContent = p.name;
+  headerSubtitle.textContent = p.store;
+  fabBtn.onclick = openItemSheet;
+
+  const total = projectTotal(p);
+  const itemsHtml = p.items.length === 0
+    ? `<div class="empty-state"><div class="icon">📦</div><div>No materials added yet.<br>Tap + to add the first item.</div></div>`
+    : p.items.map(it => `
+        <div class="item-row" data-id="${it.id}">
+          <div class="details">
+            <div class="name">${escapeHtml(it.name)}</div>
+            <div class="meta">${it.qty} × ${money(it.price)}</div>
+          </div>
+          <div class="line-total">${money(it.qty * it.price)}</div>
+          <button class="del-btn" data-del="${it.id}" title="Remove">&times;</button>
+        </div>`).join('');
+
+  projectDetailView.innerHTML = `
+    <div class="card">
+      ${itemsHtml}
+      <div class="totals">
+        <div class="label">Total materials cost</div>
+        <div class="value">${money(total)}</div>
+      </div>
+    </div>
+    <button class="danger-text" id="deleteProjectBtn">Delete this project</button>
+  `;
+
+  projectDetailView.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const itemId = btn.dataset.del;
+      p.items = p.items.filter(it => it.id !== itemId);
+      saveProjects(projects);
+      render();
+    });
+  });
+
+  const delProjectBtn = document.getElementById('deleteProjectBtn');
+  if (delProjectBtn) {
+    delProjectBtn.addEventListener('click', () => {
+      if (confirm(`Delete "${p.name}"? This can't be undone.`)) {
+        projects = projects.filter(x => x.id !== p.id);
+        saveProjects(projects);
+        currentProjectId = null;
+        render();
+      }
+    });
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+backBtn.addEventListener('click', () => {
+  currentProjectId = null;
+  render();
+});
+
+// ---- New project sheet ----
+const projectOverlay = document.getElementById('projectOverlay');
+const storeNameInput = document.getElementById('storeName');
+const projNameInput = document.getElementById('projName');
+
+function openProjectSheet() {
+  storeNameInput.value = '';
+  projNameInput.value = '';
+  projectOverlay.classList.remove('hidden');
+  setTimeout(() => storeNameInput.focus(), 50);
+}
+function closeProjectSheet() {
+  projectOverlay.classList.add('hidden');
+}
+document.getElementById('cancelProjectBtn').addEventListener('click', closeProjectSheet);
+document.getElementById('saveProjectBtn').addEventListener('click', () => {
+  const store = storeNameInput.value.trim();
+  const name = projNameInput.value.trim();
+  if (!name) { projNameInput.focus(); return; }
+  const p = {
+    id: uid(),
+    store: store || 'Unassigned store',
+    name,
+    items: [],
+    createdAt: Date.now()
+  };
+  projects.push(p);
+  saveProjects(projects);
+  closeProjectSheet();
+  currentProjectId = p.id;
+  render();
+});
+
+// ---- New item sheet ----
+const itemOverlay = document.getElementById('itemOverlay');
+const itemNameInput = document.getElementById('itemName');
+const itemQtyInput = document.getElementById('itemQty');
+const itemPriceInput = document.getElementById('itemPrice');
+
+function openItemSheet() {
+  itemNameInput.value = '';
+  itemQtyInput.value = '1';
+  itemPriceInput.value = '';
+  itemOverlay.classList.remove('hidden');
+  setTimeout(() => itemNameInput.focus(), 50);
+}
+function closeItemSheet() {
+  itemOverlay.classList.add('hidden');
+}
+document.getElementById('cancelItemBtn').addEventListener('click', closeItemSheet);
+document.getElementById('saveItemBtn').addEventListener('click', () => {
+  const p = projects.find(x => x.id === currentProjectId);
+  if (!p) return;
+  const name = itemNameInput.value.trim();
+  const qty = parseFloat(itemQtyInput.value);
+  const price = parseFloat(itemPriceInput.value);
+  if (!name) { itemNameInput.focus(); return; }
+  if (isNaN(qty) || qty <= 0) { itemQtyInput.focus(); return; }
+  if (isNaN(price) || price < 0) { itemPriceInput.focus(); return; }
+  p.items.push({ id: uid(), name, qty, price });
+  saveProjects(projects);
+  closeItemSheet();
+  render();
+});
+
+// close sheets by tapping the dark overlay background
+[projectOverlay, itemOverlay].forEach(ov => {
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov) ov.classList.add('hidden');
+  });
+});
+
+render();
+
+// register service worker for offline use (best-effort, ignored if unsupported/blocked)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
