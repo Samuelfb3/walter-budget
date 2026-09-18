@@ -149,6 +149,19 @@
     font-weight: 600;
     white-space: nowrap;
   }
+  .item-row .receipt-check {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .item-row .receipt-check input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--blue);
+    cursor: pointer;
+  }
   .item-row .del-btn {
     background: none;
     border: none;
@@ -513,6 +526,10 @@ function renderProjectDetail() {
             <div class="meta">${it.qty} × ${money(it.price)}</div>
           </div>
           <div class="line-total">${money(it.qty * it.price)}</div>
+          <label class="receipt-check" title="Check after you photograph and save the receipt">
+            <input type="checkbox" data-receipt="${it.id}" ${it.receiptChecked ? 'checked' : ''}>
+            <span>📷</span>
+          </label>
           <button class="del-btn" data-del="${it.id}" title="Remove">&times;</button>
         </div>`).join('');
 
@@ -526,6 +543,17 @@ function renderProjectDetail() {
     </div>
     <button class="danger-text" id="deleteProjectBtn">Delete this project</button>
   `;
+
+  projectDetailView.querySelectorAll('[data-receipt]').forEach(cb => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const item = p.items.find(it => it.id === cb.dataset.receipt);
+      if (item) {
+        item.receiptChecked = cb.checked;
+        saveProjects(projects);
+      }
+    });
+  });
 
   projectDetailView.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -627,7 +655,7 @@ document.getElementById('saveItemBtn').addEventListener('click', () => {
   if (!name) { itemNameInput.focus(); return; }
   if (isNaN(qty) || qty <= 0) { itemQtyInput.focus(); return; }
   if (isNaN(price) || price < 0) { itemPriceInput.focus(); return; }
-  p.items.push({ id: uid(), name, qty, price });
+  p.items.push({ id: uid(), name, qty, price, receiptChecked: false });
   saveProjects(projects);
   closeItemSheet();
   render();
