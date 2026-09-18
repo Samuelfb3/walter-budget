@@ -174,11 +174,29 @@
   }
   .store-section { margin-bottom: 24px; }
   .store-section:first-child { margin-top: 0; }
+  .store-section.collapsed { margin-bottom: 4px; }
   .store-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     margin: 0 4px 10px;
+    padding: 4px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .store-header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .store-header .chevron {
+    display: inline-block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  .store-section.collapsed .chevron {
+    transform: rotate(-90deg);
   }
   .store-header h2 {
     margin: 0;
@@ -193,6 +211,9 @@
     color: var(--muted);
     font-size: 0.88rem;
     padding: 4px 4px 0;
+  }
+  .store-section.collapsed .store-body {
+    display: none;
   }
   /* modal */
   .overlay {
@@ -342,8 +363,21 @@
 
 <script>
 const STORAGE_KEY = 'walter_budget_projects_v1';
+const COLLAPSE_KEY = 'walter_budget_collapsed_stores_v1';
 const STORES = ['#302', '#303', '#304', '#305'];
 const PRIORITIES = ['High', 'Medium', 'Low'];
+
+function loadCollapsedStores() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || []);
+  } catch (e) {
+    return new Set();
+  }
+}
+function saveCollapsedStores(set) {
+  localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set]));
+}
+let collapsedStores = loadCollapsedStores();
 
 function loadProjects() {
   try {
@@ -423,15 +457,32 @@ function renderProjectsList() {
     const body = storeProjects.length === 0
       ? `<div class="store-empty">No projects yet for this store.</div>`
       : storeProjects.map(renderProjectCard).join('');
+    const isCollapsed = collapsedStores.has(store);
     return `
-      <div class="store-section">
-        <div class="store-header">
-          <h2>Store ${escapeHtml(store)}</h2>
+      <div class="store-section${isCollapsed ? ' collapsed' : ''}">
+        <div class="store-header" data-store="${escapeHtml(store)}">
+          <span class="store-header-left">
+            <span class="chevron">&#9662;</span>
+            <h2>Store ${escapeHtml(store)}</h2>
+          </span>
           ${storeProjects.length ? `<span class="store-total">${money(storeTotal)}</span>` : ''}
         </div>
-        ${body}
+        <div class="store-body">${body}</div>
       </div>`;
   }).join('');
+
+  projectsView.querySelectorAll('.store-header').forEach(el => {
+    el.addEventListener('click', () => {
+      const store = el.dataset.store;
+      if (collapsedStores.has(store)) {
+        collapsedStores.delete(store);
+      } else {
+        collapsedStores.add(store);
+      }
+      saveCollapsedStores(collapsedStores);
+      el.closest('.store-section').classList.toggle('collapsed');
+    });
+  });
 
   projectsView.querySelectorAll('.project-card').forEach(el => {
     el.addEventListener('click', () => {
