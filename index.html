@@ -94,10 +94,18 @@
     margin: 0 0 4px;
     font-size: 1.05rem;
   }
-  .project-card .info .store {
-    color: var(--muted);
-    font-size: 0.85rem;
+  .project-card .info .priority {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 7px;
+    border-radius: 5px;
   }
+  .priority-high { color: #b3261e; background: #fbe6e5; }
+  .priority-medium { color: #96650a; background: #fbedd3; }
+  .priority-low { color: #276b3e; background: #e2f3e8; }
   .project-card .amount {
     font-weight: 600;
     font-size: 1.1rem;
@@ -163,6 +171,28 @@
     letter-spacing: 0.04em;
     color: var(--muted);
     margin: 20px 0 8px 4px;
+  }
+  .store-section { margin-bottom: 24px; }
+  .store-section:first-child { margin-top: 0; }
+  .store-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 0 4px 10px;
+  }
+  .store-header h2 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+  .store-header .store-total {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--blue);
+  }
+  .store-empty {
+    color: var(--muted);
+    font-size: 0.88rem;
+    padding: 4px 4px 0;
   }
   /* modal */
   .overlay {
@@ -274,10 +304,12 @@
 <div class="overlay hidden" id="projectOverlay">
   <div class="sheet">
     <h2>New Project</h2>
-    <label for="storeName">Store</label>
-    <input id="storeName" placeholder="e.g. Store #204 - Main St" autocomplete="off">
+    <label for="storeSelect">Store</label>
+    <select id="storeSelect"></select>
     <label for="projName">Project name</label>
     <input id="projName" placeholder="e.g. Walk-in cooler repair" autocomplete="off">
+    <label for="prioritySelect">Priority</label>
+    <select id="prioritySelect"></select>
     <div class="sheet-actions">
       <button class="secondary" id="cancelProjectBtn">Cancel</button>
       <button class="primary" id="saveProjectBtn">Create</button>
@@ -310,6 +342,8 @@
 
 <script>
 const STORAGE_KEY = 'walter_budget_projects_v1';
+const STORES = ['#302', '#303', '#304', '#305'];
+const PRIORITIES = ['High', 'Medium', 'Low'];
 
 function loadProjects() {
   try {
@@ -349,6 +383,28 @@ function render() {
   }
 }
 
+function priorityOf(p) {
+  return PRIORITIES.includes(p.priority) ? p.priority : 'Medium';
+}
+function sortByPriorityThenDate(list) {
+  return [...list].sort((a, b) => {
+    const diff = PRIORITIES.indexOf(priorityOf(a)) - PRIORITIES.indexOf(priorityOf(b));
+    return diff !== 0 ? diff : b.createdAt - a.createdAt;
+  });
+}
+function renderProjectCard(p) {
+  const total = projectTotal(p);
+  const priority = priorityOf(p);
+  return `
+    <div class="card project-card" data-id="${p.id}">
+      <div class="info">
+        <h3>${escapeHtml(p.name)}</h3>
+        <span class="priority priority-${priority.toLowerCase()}">${priority}</span>
+      </div>
+      <div class="amount">${money(total)}<span class="count">${p.items.length} item${p.items.length === 1 ? '' : 's'}</span></div>
+    </div>`;
+}
+
 function renderProjectsList() {
   projectsView.style.display = '';
   projectDetailView.style.display = 'none';
@@ -357,25 +413,23 @@ function renderProjectsList() {
   headerSubtitle.textContent = 'Materials budget by store';
   fabBtn.onclick = openProjectSheet;
 
-  if (projects.length === 0) {
-    projectsView.innerHTML = `
-      <div class="empty-state">
-        <div class="icon">🧰</div>
-        <div>No projects yet.<br>Tap + to start budgeting your first job.</div>
-      </div>`;
-    return;
-  }
+  const knownStores = new Set(STORES);
+  const extraStores = [...new Set(projects.map(p => p.store).filter(s => !knownStores.has(s)))];
+  const allStores = [...STORES, ...extraStores];
 
-  const sorted = [...projects].sort((a, b) => b.createdAt - a.createdAt);
-  projectsView.innerHTML = sorted.map(p => {
-    const total = projectTotal(p);
+  projectsView.innerHTML = allStores.map(store => {
+    const storeProjects = sortByPriorityThenDate(projects.filter(p => p.store === store));
+    const storeTotal = storeProjects.reduce((sum, p) => sum + projectTotal(p), 0);
+    const body = storeProjects.length === 0
+      ? `<div class="store-empty">No projects yet for this store.</div>`
+      : storeProjects.map(renderProjectCard).join('');
     return `
-      <div class="card project-card" data-id="${p.id}">
-        <div class="info">
-          <h3>${escapeHtml(p.name)}</h3>
-          <div class="store">${escapeHtml(p.store)}</div>
+      <div class="store-section">
+        <div class="store-header">
+          <h2>Store ${escapeHtml(store)}</h2>
+          ${storeProjects.length ? `<span class="store-total">${money(storeTotal)}</span>` : ''}
         </div>
-        <div class="amount">${money(total)}<span class="count">${p.items.length} item${p.items.length === 1 ? '' : 's'}</span></div>
+        ${body}
       </div>`;
   }).join('');
 
@@ -395,7 +449,7 @@ function renderProjectDetail() {
   projectDetailView.style.display = '';
   backBtn.style.display = '';
   headerText.textContent = p.name;
-  headerSubtitle.textContent = p.store;
+  headerSubtitle.textContent = `Store ${p.store} · ${priorityOf(p)} priority`;
   fabBtn.onclick = openItemSheet;
 
   const total = projectTotal(p);
@@ -458,26 +512,33 @@ backBtn.addEventListener('click', () => {
 
 // ---- New project sheet ----
 const projectOverlay = document.getElementById('projectOverlay');
-const storeNameInput = document.getElementById('storeName');
+const storeSelect = document.getElementById('storeSelect');
 const projNameInput = document.getElementById('projName');
+const prioritySelect = document.getElementById('prioritySelect');
+
+storeSelect.innerHTML = STORES.map(s => `<option value="${s}">Store ${s}</option>`).join('');
+prioritySelect.innerHTML = PRIORITIES.map(p => `<option value="${p}">${p}</option>`).join('');
 
 function openProjectSheet() {
-  storeNameInput.value = '';
+  storeSelect.value = STORES[0];
   projNameInput.value = '';
+  prioritySelect.value = 'Medium';
   projectOverlay.classList.remove('hidden');
-  setTimeout(() => storeNameInput.focus(), 50);
+  setTimeout(() => projNameInput.focus(), 50);
 }
 function closeProjectSheet() {
   projectOverlay.classList.add('hidden');
 }
 document.getElementById('cancelProjectBtn').addEventListener('click', closeProjectSheet);
 document.getElementById('saveProjectBtn').addEventListener('click', () => {
-  const store = storeNameInput.value.trim();
+  const store = storeSelect.value;
   const name = projNameInput.value.trim();
+  const priority = prioritySelect.value;
   if (!name) { projNameInput.focus(); return; }
   const p = {
     id: uid(),
-    store: store || 'Unassigned store',
+    store,
+    priority,
     name,
     items: [],
     createdAt: Date.now()
