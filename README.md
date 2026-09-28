@@ -12,11 +12,10 @@ A simple app for tracking materials and costs on restaurant repair jobs, organiz
 
 ## The dashboard
 
-When you open the app you'll see four sections, one per store: **#302, #303, #304, #305**.
+When you open the app you'll see four tabs across the top, one per store: **#302, #303, #304, #305**. Tap a tab to see that store's projects and its total cost.
 
-- Tap a store's name to fold/unfold its project list. The store's total cost still shows even when it's folded.
 - Tap the **+** button (bottom right) to start a new project. You'll pick a store, name the job, and set a priority (High / Medium / Low).
-- Inside each store, projects are sorted by priority automatically — High jobs float to the top.
+- Tap **Rearrange** (above the project list) to put the projects in whatever order makes sense to you — use the ▲▼ buttons on each project to move it up or down. Tap **Done** when you're finished. Your order is saved and stays that way until you change it again.
 
 ## Inside a project
 

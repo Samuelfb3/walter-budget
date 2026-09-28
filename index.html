@@ -185,39 +185,37 @@
     color: var(--muted);
     margin: 20px 0 8px 4px;
   }
-  .store-section { margin-bottom: 24px; }
-  .store-section:first-child { margin-top: 0; }
-  .store-section.collapsed { margin-bottom: 4px; }
-  .store-header {
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+  }
+  .tab {
+    flex: 1;
+    background: #eef0f3;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 6px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tab.active {
+    background: var(--blue);
+    color: white;
+  }
+  .store-panel-header {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     margin: 0 4px 10px;
-    padding: 4px 0;
-    cursor: pointer;
-    user-select: none;
   }
-  .store-header-left {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .store-header .chevron {
-    display: inline-block;
-    font-size: 0.7rem;
-    color: var(--muted);
-    transition: transform 0.15s ease;
-  }
-  .store-section.collapsed .chevron {
-    transform: rotate(-90deg);
-  }
-  .store-header h2 {
-    margin: 0;
-    font-size: 1.05rem;
-  }
-  .store-header .store-total {
-    font-size: 0.9rem;
-    font-weight: 600;
+  .store-panel-header .store-total {
+    font-size: 1.1rem;
+    font-weight: 700;
     color: var(--blue);
   }
   .store-empty {
@@ -225,8 +223,29 @@
     font-size: 0.88rem;
     padding: 4px 4px 0;
   }
-  .store-section.collapsed .store-body {
-    display: none;
+  .project-card.reordering {
+    cursor: default;
+  }
+  .reorder-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-right: 10px;
+  }
+  .reorder-btn {
+    background: #eef0f3;
+    border: none;
+    border-radius: 6px;
+    width: 32px;
+    height: 26px;
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .reorder-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
   /* modal */
   .overlay {
@@ -376,21 +395,18 @@
 
 <script>
 const STORAGE_KEY = 'walter_budget_projects_v1';
-const COLLAPSE_KEY = 'walter_budget_collapsed_stores_v1';
+const ACTIVE_STORE_KEY = 'walter_budget_active_store_v1';
 const STORES = ['#302', '#303', '#304', '#305'];
 const PRIORITIES = ['High', 'Medium', 'Low'];
 
-function loadCollapsedStores() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || []);
-  } catch (e) {
-    return new Set();
-  }
+function loadActiveStore() {
+  return localStorage.getItem(ACTIVE_STORE_KEY) || STORES[0];
 }
-function saveCollapsedStores(set) {
-  localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set]));
+function saveActiveStore(store) {
+  localStorage.setItem(ACTIVE_STORE_KEY, store);
 }
-let collapsedStores = loadCollapsedStores();
+let activeStore = loadActiveStore();
+let reorderMode = false;
 
 function loadProjects() {
   try {
@@ -414,6 +430,20 @@ function projectTotal(p) {
 
 let projects = loadProjects();
 let currentProjectId = null;
+
+function migrateProjectOrder(list) {
+  let changed = false;
+  const stores = [...new Set(list.map(p => p.store))];
+  stores.forEach(store => {
+    const storeProjects = list.filter(p => p.store === store);
+    if (storeProjects.some(p => typeof p.order !== 'number')) {
+      sortByPriorityThenDate(storeProjects).forEach((p, i) => { p.order = i; });
+      changed = true;
+    }
+  });
+  if (changed) saveProjects(list);
+}
+migrateProjectOrder(projects);
 
 const projectsView = document.getElementById('projectsView');
 const projectDetailView = document.getElementById('projectDetailView');
@@ -439,11 +469,34 @@ function sortByPriorityThenDate(list) {
     return diff !== 0 ? diff : b.createdAt - a.createdAt;
   });
 }
-function renderProjectCard(p) {
+function sortByOrder(list) {
+  return [...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+function moveProject(id, direction) {
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  const storeProjects = sortByOrder(projects.filter(x => x.store === p.store));
+  const idx = storeProjects.findIndex(x => x.id === id);
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= storeProjects.length) return;
+  const other = storeProjects[swapIdx];
+  const tmp = p.order;
+  p.order = other.order;
+  other.order = tmp;
+  saveProjects(projects);
+  render();
+}
+function renderProjectCard(p, opts) {
   const total = projectTotal(p);
   const priority = priorityOf(p);
+  const arrows = opts.reordering ? `
+      <div class="reorder-btns">
+        <button class="reorder-btn" data-move="up" data-id="${p.id}" ${opts.isFirst ? 'disabled' : ''}>&#9650;</button>
+        <button class="reorder-btn" data-move="down" data-id="${p.id}" ${opts.isLast ? 'disabled' : ''}>&#9660;</button>
+      </div>` : '';
   return `
-    <div class="card project-card" data-id="${p.id}">
+    <div class="card project-card${opts.reordering ? ' reordering' : ''}" data-id="${p.id}">
+      ${arrows}
       <div class="info">
         <h3>${escapeHtml(p.name)}</h3>
         <span class="priority priority-${priority.toLowerCase()}">${priority}</span>
@@ -463,46 +516,62 @@ function renderProjectsList() {
   const knownStores = new Set(STORES);
   const extraStores = [...new Set(projects.map(p => p.store).filter(s => !knownStores.has(s)))];
   const allStores = [...STORES, ...extraStores];
+  if (!allStores.includes(activeStore)) activeStore = allStores[0];
 
-  projectsView.innerHTML = allStores.map(store => {
-    const storeProjects = sortByPriorityThenDate(projects.filter(p => p.store === store));
-    const storeTotal = storeProjects.reduce((sum, p) => sum + projectTotal(p), 0);
-    const body = storeProjects.length === 0
-      ? `<div class="store-empty">No projects yet for this store.</div>`
-      : storeProjects.map(renderProjectCard).join('');
-    const isCollapsed = collapsedStores.has(store);
-    return `
-      <div class="store-section${isCollapsed ? ' collapsed' : ''}">
-        <div class="store-header" data-store="${escapeHtml(store)}">
-          <span class="store-header-left">
-            <span class="chevron">&#9662;</span>
-            <h2>Store ${escapeHtml(store)}</h2>
-          </span>
-          ${storeProjects.length ? `<span class="store-total">${money(storeTotal)}</span>` : ''}
-        </div>
-        <div class="store-body">${body}</div>
-      </div>`;
-  }).join('');
+  const storeProjects = sortByOrder(projects.filter(p => p.store === activeStore));
+  const storeTotal = storeProjects.reduce((sum, p) => sum + projectTotal(p), 0);
+  const canReorder = storeProjects.length > 1;
+  if (!canReorder) reorderMode = false;
 
-  projectsView.querySelectorAll('.store-header').forEach(el => {
+  const body = storeProjects.length === 0
+    ? `<div class="store-empty">No projects yet for this store.</div>`
+    : storeProjects.map((p, i) => renderProjectCard(p, {
+        reordering: reorderMode,
+        isFirst: i === 0,
+        isLast: i === storeProjects.length - 1
+      })).join('');
+
+  projectsView.innerHTML = `
+    <div class="tabs">${allStores.map(store => `<button class="tab${store === activeStore ? ' active' : ''}" data-store="${escapeHtml(store)}">${escapeHtml(store)}</button>`).join('')}</div>
+    <div class="store-panel-header">
+      <span class="store-total">${money(storeTotal)}</span>
+      ${canReorder ? `<button class="icon-btn" id="reorderToggleBtn">${reorderMode ? 'Done' : 'Rearrange'}</button>` : ''}
+    </div>
+    ${body}
+  `;
+
+  projectsView.querySelectorAll('.tab').forEach(el => {
     el.addEventListener('click', () => {
-      const store = el.dataset.store;
-      if (collapsedStores.has(store)) {
-        collapsedStores.delete(store);
-      } else {
-        collapsedStores.add(store);
-      }
-      saveCollapsedStores(collapsedStores);
-      el.closest('.store-section').classList.toggle('collapsed');
-    });
-  });
-
-  projectsView.querySelectorAll('.project-card').forEach(el => {
-    el.addEventListener('click', () => {
-      currentProjectId = el.dataset.id;
+      activeStore = el.dataset.store;
+      saveActiveStore(activeStore);
+      reorderMode = false;
       render();
     });
   });
+
+  const reorderToggleBtn = document.getElementById('reorderToggleBtn');
+  if (reorderToggleBtn) {
+    reorderToggleBtn.addEventListener('click', () => {
+      reorderMode = !reorderMode;
+      render();
+    });
+  }
+
+  if (reorderMode) {
+    projectsView.querySelectorAll('[data-move]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveProject(btn.dataset.id, btn.dataset.move);
+      });
+    });
+  } else {
+    projectsView.querySelectorAll('.project-card').forEach(el => {
+      el.addEventListener('click', () => {
+        currentProjectId = el.dataset.id;
+        render();
+      });
+    });
+  }
 }
 
 function renderProjectDetail() {
@@ -599,7 +668,7 @@ storeSelect.innerHTML = STORES.map(s => `<option value="${s}">Store ${s}</option
 prioritySelect.innerHTML = PRIORITIES.map(p => `<option value="${p}">${p}</option>`).join('');
 
 function openProjectSheet() {
-  storeSelect.value = STORES[0];
+  storeSelect.value = STORES.includes(activeStore) ? activeStore : STORES[0];
   projNameInput.value = '';
   prioritySelect.value = 'Medium';
   projectOverlay.classList.remove('hidden');
@@ -614,17 +683,22 @@ document.getElementById('saveProjectBtn').addEventListener('click', () => {
   const name = projNameInput.value.trim();
   const priority = prioritySelect.value;
   if (!name) { projNameInput.focus(); return; }
+  const storeProjects = projects.filter(x => x.store === store);
+  const maxOrder = storeProjects.reduce((m, x) => Math.max(m, typeof x.order === 'number' ? x.order : 0), -1);
   const p = {
     id: uid(),
     store,
     priority,
     name,
     items: [],
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    order: maxOrder + 1
   };
   projects.push(p);
   saveProjects(projects);
   closeProjectSheet();
+  activeStore = store;
+  saveActiveStore(activeStore);
   currentProjectId = p.id;
   render();
 });
