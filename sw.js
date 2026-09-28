@@ -1,4 +1,4 @@
-const CACHE_NAME = 'walter-budget-v7';
+const CACHE_NAME = 'walter-budget-v8';
 const ASSETS = ['./index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {

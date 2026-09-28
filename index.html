@@ -212,10 +212,13 @@
   .tabs {
     display: flex;
     gap: 8px;
+    margin-top: -8px;
     margin-bottom: 16px;
+    padding-top: 8px;
     overflow-x: auto;
   }
   .tab {
+    position: relative;
     flex: 1;
     background: #eef0f3;
     border: none;
@@ -230,6 +233,21 @@
   .tab.active {
     background: var(--blue);
     color: white;
+  }
+  .tab-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9px;
+    background: var(--danger);
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
   }
   .store-panel-header {
     display: flex;
@@ -679,6 +697,11 @@ function renderProjectsList() {
   const allStores = [...STORES, ...extraStores];
   if (!allStores.includes(activeStore)) activeStore = allStores[0];
 
+  const activeCounts = {};
+  allStores.forEach(store => {
+    activeCounts[store] = projects.filter(p => p.store === store && !p.finished).length;
+  });
+
   const storeAllProjects = projects.filter(p => p.store === activeStore);
   const storeProjects = sortByOrder(storeAllProjects.filter(p => !p.finished));
   const finishedProjects = sortByOrder(storeAllProjects.filter(p => p.finished));
@@ -703,7 +726,7 @@ function renderProjectsList() {
     </div>`;
 
   projectsView.innerHTML = `
-    <div class="tabs">${allStores.map(store => `<button class="tab${store === activeStore ? ' active' : ''}" data-store="${escapeHtml(store)}">${escapeHtml(store)}</button>`).join('')}</div>
+    <div class="tabs">${allStores.map(store => `<button class="tab${store === activeStore ? ' active' : ''}" data-store="${escapeHtml(store)}">${escapeHtml(store)}${activeCounts[store] ? `<span class="tab-count">${activeCounts[store]}</span>` : ''}</button>`).join('')}</div>
     <div class="store-panel-header">
       <span class="store-total">${money(storeTotal)}</span>
       ${canReorder ? `<button class="icon-btn" id="reorderToggleBtn">${reorderMode ? 'Done' : 'Rearrange'}</button>` : ''}
