@@ -39,7 +39,14 @@
     font-size: 1.25rem;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
+  }
+  header .title-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
   }
   header .back {
     background: none;
@@ -49,6 +56,23 @@
     cursor: pointer;
     padding: 0 4px 0 0;
     line-height: 1;
+  }
+  .clock-btn {
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.45);
+    color: white;
+    border-radius: 20px;
+    padding: 6px 13px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .clock-btn.active {
+    background: white;
+    color: var(--blue-dark);
   }
   header .subtitle {
     font-size: 0.85rem;
@@ -340,8 +364,11 @@
 
 <header>
   <h1 id="headerTitle">
-    <button class="back" id="backBtn" style="display:none">&#8592;</button>
-    <span id="headerText">Walter's Projects</span>
+    <span class="title-left">
+      <button class="back" id="backBtn" style="display:none">&#8592;</button>
+      <span id="headerText">Walter's Projects</span>
+    </span>
+    <button class="clock-btn" id="clockBtn">Clock In</button>
   </h1>
   <div class="subtitle" id="headerSubtitle">Materials budget by store</div>
 </header>
@@ -393,6 +420,17 @@
   </div>
 </div>
 
+<!-- Clock-out summary sheet -->
+<div class="overlay hidden" id="clockSummaryOverlay">
+  <div class="sheet">
+    <h2>Clocked Out</h2>
+    <div id="clockSummaryBody"></div>
+    <div class="sheet-actions">
+      <button class="primary" id="clockSummaryDoneBtn">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORAGE_KEY = 'walter_budget_projects_v1';
 const ACTIVE_STORE_KEY = 'walter_budget_active_store_v1';
@@ -430,6 +468,107 @@ function projectTotal(p) {
 
 let projects = loadProjects();
 let currentProjectId = null;
+
+// ---- Clock in/out ----
+const CLOCK_KEY = 'walter_budget_clock_v1';
+function loadClock() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CLOCK_KEY));
+    if (parsed && parsed.active) return parsed;
+  } catch (e) {}
+  return { active: false, startedAt: null, projects: {} };
+}
+function saveClock(state) {
+  localStorage.setItem(CLOCK_KEY, JSON.stringify(state));
+}
+let clockState = loadClock();
+let clockTickHandle = null;
+const clockBtn = document.getElementById('clockBtn');
+
+function formatDuration(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
+}
+function updateClockBtn() {
+  if (clockState.active) {
+    clockBtn.textContent = formatDuration(Date.now() - clockState.startedAt);
+    clockBtn.classList.add('active');
+  } else {
+    clockBtn.textContent = 'Clock In';
+    clockBtn.classList.remove('active');
+  }
+}
+function startClockTicking() {
+  stopClockTicking();
+  clockTickHandle = setInterval(updateClockBtn, 1000);
+}
+function stopClockTicking() {
+  if (clockTickHandle) { clearInterval(clockTickHandle); clockTickHandle = null; }
+}
+function clockIn() {
+  clockState = { active: true, startedAt: Date.now(), projects: {} };
+  saveClock(clockState);
+  updateClockBtn();
+  startClockTicking();
+}
+function trackProjectWork(p) {
+  if (!clockState.active || !p) return;
+  if (!clockState.projects[p.id]) {
+    clockState.projects[p.id] = { name: p.name, store: p.store, materialsAdded: 0 };
+    saveClock(clockState);
+  }
+}
+function trackMaterialAdded(p) {
+  if (!clockState.active || !p) return;
+  trackProjectWork(p);
+  clockState.projects[p.id].materialsAdded += 1;
+  saveClock(clockState);
+}
+function showClockSummary(elapsedMs, summary) {
+  const body = document.getElementById('clockSummaryBody');
+  const listHtml = summary.length === 0
+    ? `<div class="store-empty">No projects opened this session.</div>`
+    : summary.map(s => `
+      <div class="item-row">
+        <div class="details">
+          <div class="name">${escapeHtml(s.name)}</div>
+          <div class="meta">Store ${escapeHtml(s.store)}${s.materialsAdded ? ` · ${s.materialsAdded} material${s.materialsAdded === 1 ? '' : 's'} added` : ''}</div>
+        </div>
+      </div>`).join('');
+  body.innerHTML = `
+    <div class="totals">
+      <div class="label">Total time clocked</div>
+      <div class="value">${formatDuration(elapsedMs)}</div>
+    </div>
+    <div class="section-title">Projects worked on</div>
+    ${listHtml}
+  `;
+  document.getElementById('clockSummaryOverlay').classList.remove('hidden');
+}
+function clockOut() {
+  const elapsedMs = Date.now() - clockState.startedAt;
+  const summary = Object.values(clockState.projects);
+  stopClockTicking();
+  clockState = { active: false, startedAt: null, projects: {} };
+  saveClock(clockState);
+  updateClockBtn();
+  showClockSummary(elapsedMs, summary);
+}
+clockBtn.addEventListener('click', () => {
+  if (!clockState.active) {
+    clockIn();
+  } else if (confirm('Clock out now?')) {
+    clockOut();
+  }
+});
+document.getElementById('clockSummaryDoneBtn').addEventListener('click', () => {
+  document.getElementById('clockSummaryOverlay').classList.add('hidden');
+});
+updateClockBtn();
+if (clockState.active) startClockTicking();
 
 function migrateProjectOrder(list) {
   let changed = false;
@@ -577,6 +716,7 @@ function renderProjectsList() {
 function renderProjectDetail() {
   const p = projects.find(x => x.id === currentProjectId);
   if (!p) { currentProjectId = null; render(); return; }
+  trackProjectWork(p);
 
   projectsView.style.display = 'none';
   projectDetailView.style.display = '';
@@ -731,12 +871,13 @@ document.getElementById('saveItemBtn').addEventListener('click', () => {
   if (isNaN(price) || price < 0) { itemPriceInput.focus(); return; }
   p.items.push({ id: uid(), name, qty, price, receiptChecked: false });
   saveProjects(projects);
+  trackMaterialAdded(p);
   closeItemSheet();
   render();
 });
 
 // close sheets by tapping the dark overlay background
-[projectOverlay, itemOverlay].forEach(ov => {
+[projectOverlay, itemOverlay, document.getElementById('clockSummaryOverlay')].forEach(ov => {
   ov.addEventListener('click', (e) => {
     if (e.target === ov) ov.classList.add('hidden');
   });
