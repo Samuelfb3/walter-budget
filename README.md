@@ -33,6 +33,7 @@ Tap any project to open it.
 - Tap **+** to add a material: name, quantity, and unit price. The line total and the project's total cost update automatically.
 - The **camera checkbox (📷)** next to each material is a reminder — check it off once you've actually taken a photo of the receipt and saved it (email it to yourself, keep it in Photos, whatever you normally do). **The app does not store the photo itself**, it's just a checklist so nothing gets forgotten.
 - The **×** deletes a material. **Delete this project** at the bottom removes the whole job.
+- **Mark as finished** moves the project out of that store's active list. It's still there, just tucked into the **Finished projects** dropdown at the bottom of the store tab — tap the dropdown and pick it to open it again. A finished project's cost no longer counts toward the store's total. Open it and tap **Reopen project** if you need to put it back on the active list.
 
 ## Good to know
 

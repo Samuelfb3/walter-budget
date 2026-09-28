@@ -271,6 +271,28 @@
     opacity: 0.3;
     cursor: default;
   }
+  .finished-picker {
+    margin-top: 20px;
+  }
+  .finished-picker select {
+    background: #eef0f3;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: none;
+  }
+  .finished-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 7px;
+    border-radius: 5px;
+    color: #276b3e;
+    background: #e2f3e8;
+    margin-left: 6px;
+  }
   /* modal */
   .overlay {
     position: fixed;
@@ -614,7 +636,7 @@ function sortByOrder(list) {
 function moveProject(id, direction) {
   const p = projects.find(x => x.id === id);
   if (!p) return;
-  const storeProjects = sortByOrder(projects.filter(x => x.store === p.store));
+  const storeProjects = sortByOrder(projects.filter(x => x.store === p.store && !x.finished));
   const idx = storeProjects.findIndex(x => x.id === id);
   const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
   if (swapIdx < 0 || swapIdx >= storeProjects.length) return;
@@ -657,7 +679,9 @@ function renderProjectsList() {
   const allStores = [...STORES, ...extraStores];
   if (!allStores.includes(activeStore)) activeStore = allStores[0];
 
-  const storeProjects = sortByOrder(projects.filter(p => p.store === activeStore));
+  const storeAllProjects = projects.filter(p => p.store === activeStore);
+  const storeProjects = sortByOrder(storeAllProjects.filter(p => !p.finished));
+  const finishedProjects = sortByOrder(storeAllProjects.filter(p => p.finished));
   const storeTotal = storeProjects.reduce((sum, p) => sum + projectTotal(p), 0);
   const canReorder = storeProjects.length > 1;
   if (!canReorder) reorderMode = false;
@@ -670,6 +694,14 @@ function renderProjectsList() {
         isLast: i === storeProjects.length - 1
       })).join('');
 
+  const finishedDropdown = finishedProjects.length === 0 ? '' : `
+    <div class="finished-picker">
+      <select id="finishedSelect">
+        <option value="">Finished projects (${finishedProjects.length})</option>
+        ${finishedProjects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+      </select>
+    </div>`;
+
   projectsView.innerHTML = `
     <div class="tabs">${allStores.map(store => `<button class="tab${store === activeStore ? ' active' : ''}" data-store="${escapeHtml(store)}">${escapeHtml(store)}</button>`).join('')}</div>
     <div class="store-panel-header">
@@ -677,7 +709,18 @@ function renderProjectsList() {
       ${canReorder ? `<button class="icon-btn" id="reorderToggleBtn">${reorderMode ? 'Done' : 'Rearrange'}</button>` : ''}
     </div>
     ${body}
+    ${finishedDropdown}
   `;
+
+  const finishedSelect = document.getElementById('finishedSelect');
+  if (finishedSelect) {
+    finishedSelect.addEventListener('change', () => {
+      if (finishedSelect.value) {
+        currentProjectId = finishedSelect.value;
+        render();
+      }
+    });
+  }
 
   projectsView.querySelectorAll('.tab').forEach(el => {
     el.addEventListener('click', () => {
@@ -722,7 +765,7 @@ function renderProjectDetail() {
   projectDetailView.style.display = '';
   backBtn.style.display = '';
   headerText.textContent = p.name;
-  headerSubtitle.textContent = `Store ${p.store} · ${priorityOf(p)} priority`;
+  headerSubtitle.textContent = `Store ${p.store} · ${priorityOf(p)} priority${p.finished ? ' · Finished' : ''}`;
   fabBtn.onclick = openItemSheet;
 
   const total = projectTotal(p);
@@ -750,8 +793,17 @@ function renderProjectDetail() {
         <div class="value">${money(total)}</div>
       </div>
     </div>
+    <div class="sheet-actions">
+      <button class="secondary" id="toggleFinishedBtn">${p.finished ? 'Reopen project' : 'Mark as finished'}</button>
+    </div>
     <button class="danger-text" id="deleteProjectBtn">Delete this project</button>
   `;
+
+  document.getElementById('toggleFinishedBtn').addEventListener('click', () => {
+    p.finished = !p.finished;
+    saveProjects(projects);
+    render();
+  });
 
   projectDetailView.querySelectorAll('[data-receipt]').forEach(cb => {
     cb.addEventListener('click', (e) => e.stopPropagation());
@@ -832,7 +884,8 @@ document.getElementById('saveProjectBtn').addEventListener('click', () => {
     name,
     items: [],
     createdAt: Date.now(),
-    order: maxOrder + 1
+    order: maxOrder + 1,
+    finished: false
   };
   projects.push(p);
   saveProjects(projects);
