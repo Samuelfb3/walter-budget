@@ -416,6 +416,7 @@
 <main>
   <div id="projectsView"></div>
   <div id="projectDetailView" style="display:none"></div>
+  <div id="timesheetView" style="display:none"></div>
 </main>
 
 <button class="fab" id="fabBtn">+</button>
@@ -456,6 +457,19 @@
     <div class="sheet-actions">
       <button class="secondary" id="cancelItemBtn">Cancel</button>
       <button class="primary" id="saveItemBtn">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clock In sheet -->
+<div class="overlay hidden" id="clockInOverlay">
+  <div class="sheet">
+    <h2>Clock In</h2>
+    <label for="clockStoreSelect">Which store are you at?</label>
+    <select id="clockStoreSelect"></select>
+    <div class="sheet-actions">
+      <button class="secondary" id="cancelClockInBtn">Cancel</button>
+      <button class="primary" id="startClockBtn">Start</button>
     </div>
   </div>
 </div>
@@ -513,17 +527,30 @@ let currentProjectId = null;
 
 // ---- Clock in/out ----
 const CLOCK_KEY = 'walter_budget_clock_v1';
+const TIMELOG_KEY = 'walter_budget_timelog_v1';
 function loadClock() {
   try {
     const parsed = JSON.parse(localStorage.getItem(CLOCK_KEY));
     if (parsed && parsed.active) return parsed;
   } catch (e) {}
-  return { active: false, startedAt: null, projects: {} };
+  return { active: false, startedAt: null, store: null, projects: {} };
 }
 function saveClock(state) {
   localStorage.setItem(CLOCK_KEY, JSON.stringify(state));
 }
+function loadTimelog() {
+  try {
+    return JSON.parse(localStorage.getItem(TIMELOG_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+function saveTimelog(list) {
+  localStorage.setItem(TIMELOG_KEY, JSON.stringify(list));
+}
 let clockState = loadClock();
+let timelog = loadTimelog();
+let showingTimesheet = false;
 let clockTickHandle = null;
 const clockBtn = document.getElementById('clockBtn');
 
@@ -533,6 +560,25 @@ function formatDuration(ms) {
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
   return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
+}
+function formatHoursLabel(ms) {
+  const totalMin = Math.max(0, Math.round(ms / 60000));
+  return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
+}
+function formatHM(ms) {
+  const totalMin = Math.max(0, Math.round(ms / 60000));
+  return `${Math.floor(totalMin / 60)}:${String(totalMin % 60).padStart(2, '0')}`;
+}
+function dateKeyOf(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function formatDateLabel(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function formatClockTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 function updateClockBtn() {
   if (clockState.active) {
@@ -550,8 +596,8 @@ function startClockTicking() {
 function stopClockTicking() {
   if (clockTickHandle) { clearInterval(clockTickHandle); clockTickHandle = null; }
 }
-function clockIn() {
-  clockState = { active: true, startedAt: Date.now(), projects: {} };
+function clockIn(store) {
+  clockState = { active: true, startedAt: Date.now(), store, projects: {} };
   saveClock(clockState);
   updateClockBtn();
   startClockTicking();
@@ -569,7 +615,7 @@ function trackMaterialAdded(p) {
   clockState.projects[p.id].materialsAdded += 1;
   saveClock(clockState);
 }
-function showClockSummary(elapsedMs, summary) {
+function showClockSummary(elapsedMs, store, summary) {
   const body = document.getElementById('clockSummaryBody');
   const listHtml = summary.length === 0
     ? `<div class="store-empty">No projects opened this session.</div>`
@@ -582,6 +628,10 @@ function showClockSummary(elapsedMs, summary) {
       </div>`).join('');
   body.innerHTML = `
     <div class="totals">
+      <div class="label">Store</div>
+      <div class="value" style="font-size:1.1rem;">${escapeHtml(store || 'Unknown')}</div>
+    </div>
+    <div class="totals">
       <div class="label">Total time clocked</div>
       <div class="value">${formatDuration(elapsedMs)}</div>
     </div>
@@ -593,15 +643,40 @@ function showClockSummary(elapsedMs, summary) {
 function clockOut() {
   const elapsedMs = Date.now() - clockState.startedAt;
   const summary = Object.values(clockState.projects);
+  const store = clockState.store;
+  timelog.push({
+    id: uid(),
+    store: store || null,
+    clockIn: clockState.startedAt,
+    clockOut: Date.now(),
+    dateKey: dateKeyOf(clockState.startedAt)
+  });
+  saveTimelog(timelog);
   stopClockTicking();
-  clockState = { active: false, startedAt: null, projects: {} };
+  clockState = { active: false, startedAt: null, store: null, projects: {} };
   saveClock(clockState);
   updateClockBtn();
-  showClockSummary(elapsedMs, summary);
+  showClockSummary(elapsedMs, store, summary);
 }
+const clockInOverlay = document.getElementById('clockInOverlay');
+const clockStoreSelect = document.getElementById('clockStoreSelect');
+clockStoreSelect.innerHTML = STORES.map(s => `<option value="${s}">Store ${s}</option>`).join('');
+function openClockInSheet() {
+  clockStoreSelect.value = STORES.includes(activeStore) ? activeStore : STORES[0];
+  clockInOverlay.classList.remove('hidden');
+}
+function closeClockInSheet() {
+  clockInOverlay.classList.add('hidden');
+}
+document.getElementById('cancelClockInBtn').addEventListener('click', closeClockInSheet);
+document.getElementById('startClockBtn').addEventListener('click', () => {
+  const store = clockStoreSelect.value;
+  closeClockInSheet();
+  clockIn(store);
+});
 clockBtn.addEventListener('click', () => {
   if (!clockState.active) {
-    clockIn();
+    openClockInSheet();
   } else if (confirm('Clock out now?')) {
     clockOut();
   }
@@ -628,13 +703,16 @@ migrateProjectOrder(projects);
 
 const projectsView = document.getElementById('projectsView');
 const projectDetailView = document.getElementById('projectDetailView');
+const timesheetView = document.getElementById('timesheetView');
 const headerText = document.getElementById('headerText');
 const headerSubtitle = document.getElementById('headerSubtitle');
 const backBtn = document.getElementById('backBtn');
 const fabBtn = document.getElementById('fabBtn');
 
 function render() {
-  if (currentProjectId) {
+  if (showingTimesheet) {
+    renderTimesheetView();
+  } else if (currentProjectId) {
     renderProjectDetail();
   } else {
     renderProjectsList();
@@ -689,7 +767,9 @@ function renderProjectCard(p, opts) {
 function renderProjectsList() {
   projectsView.style.display = '';
   projectDetailView.style.display = 'none';
+  timesheetView.style.display = 'none';
   backBtn.style.display = 'none';
+  fabBtn.style.display = '';
   headerText.textContent = "Walter's Projects";
   headerSubtitle.textContent = 'Materials budget by store';
   fabBtn.onclick = openProjectSheet;
@@ -729,6 +809,7 @@ function renderProjectsList() {
 
   projectsView.innerHTML = `
     <div class="toolbar">
+      <button class="icon-btn" id="timesheetBtn">Timesheet</button>
       <button class="icon-btn" id="backupBtn">Backup</button>
       <button class="icon-btn" id="restoreBtn">Restore</button>
     </div>
@@ -753,6 +834,10 @@ function renderProjectsList() {
 
   document.getElementById('backupBtn').addEventListener('click', exportBackup);
   document.getElementById('restoreBtn').addEventListener('click', () => restoreFileInput.click());
+  document.getElementById('timesheetBtn').addEventListener('click', () => {
+    showingTimesheet = true;
+    render();
+  });
 
   projectsView.querySelectorAll('.tab').forEach(el => {
     el.addEventListener('click', () => {
@@ -795,7 +880,9 @@ function renderProjectDetail() {
 
   projectsView.style.display = 'none';
   projectDetailView.style.display = '';
+  timesheetView.style.display = 'none';
   backBtn.style.display = '';
+  fabBtn.style.display = '';
   headerText.textContent = p.name;
   headerSubtitle.textContent = `Store ${p.store} · ${priorityOf(p)} priority${p.finished ? ' · Finished' : ''}`;
   fabBtn.onclick = openItemSheet;
@@ -875,10 +962,11 @@ function renderProjectDetail() {
 const restoreFileInput = document.getElementById('restoreFileInput');
 function exportBackup() {
   const data = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     projects,
-    activeStore
+    activeStore,
+    timelog
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -905,14 +993,19 @@ function importBackupFile(file) {
       alert("That file couldn't be read. Make sure it's a Walter's Budget backup file.");
       return;
     }
-    if (!confirm('This will replace all current projects with the backup. Continue?')) return;
+    if (!confirm('This will replace all current projects and timesheet data with the backup. Continue?')) return;
     projects = data.projects;
     saveProjects(projects);
+    if (Array.isArray(data.timelog)) {
+      timelog = data.timelog;
+      saveTimelog(timelog);
+    }
     if (data.activeStore) {
       activeStore = data.activeStore;
       saveActiveStore(activeStore);
     }
     currentProjectId = null;
+    showingTimesheet = false;
     render();
     alert('Backup restored.');
   };
@@ -924,6 +1017,93 @@ restoreFileInput.addEventListener('change', () => {
   restoreFileInput.value = '';
 });
 
+function groupTimelogByDate() {
+  const byDate = {};
+  timelog.forEach(e => {
+    if (!byDate[e.dateKey]) byDate[e.dateKey] = [];
+    byDate[e.dateKey].push(e);
+  });
+  return byDate;
+}
+
+function renderTimesheetView() {
+  projectsView.style.display = 'none';
+  projectDetailView.style.display = 'none';
+  timesheetView.style.display = '';
+  backBtn.style.display = '';
+  fabBtn.style.display = 'none';
+  headerText.textContent = 'Timesheet';
+  headerSubtitle.textContent = 'Clocked time by day and store';
+
+  const byDate = groupTimelogByDate();
+  const dateKeys = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+  const body = dateKeys.length === 0
+    ? `<div class="empty-state"><div class="icon">🕒</div><div>No clocked time yet.<br>Tap Clock In on the dashboard to start.</div></div>`
+    : dateKeys.map(dateKey => {
+        const sessions = byDate[dateKey].slice().sort((a, b) => a.clockIn - b.clockIn);
+        const dayTotal = sessions.reduce((sum, s) => sum + (s.clockOut - s.clockIn), 0);
+        const rows = sessions.map(s => `
+          <div class="item-row">
+            <div class="details">
+              <div class="name">Store ${escapeHtml(s.store || 'Unknown')}</div>
+              <div class="meta">${formatClockTime(s.clockIn)} – ${formatClockTime(s.clockOut)}</div>
+            </div>
+            <div class="line-total">${formatHoursLabel(s.clockOut - s.clockIn)}</div>
+          </div>`).join('');
+        return `
+          <div class="card">
+            <div class="store-panel-header" style="margin:0 0 6px;">
+              <span style="font-weight:700;">${formatDateLabel(dateKey)}</span>
+              <span class="store-total">${formatHoursLabel(dayTotal)}</span>
+            </div>
+            ${rows}
+          </div>`;
+      }).join('');
+
+  timesheetView.innerHTML = `
+    <div class="toolbar">
+      <button class="icon-btn" id="exportTimesheetBtn">Export to Excel</button>
+    </div>
+    ${body}
+  `;
+
+  const exportBtn = document.getElementById('exportTimesheetBtn');
+  if (exportBtn) exportBtn.addEventListener('click', exportTimesheetCsv);
+}
+
+function csvField(val) {
+  const s = String(val ?? '');
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exportTimesheetCsv() {
+  if (timelog.length === 0) { alert('No clocked time yet to export.'); return; }
+  const byDate = groupTimelogByDate();
+  const dateKeys = Object.keys(byDate).sort();
+  const rows = [['Date', 'Store', 'Clock In', 'Clock Out', 'Duration', 'Hours']];
+  dateKeys.forEach(dateKey => {
+    const sessions = byDate[dateKey].slice().sort((a, b) => a.clockIn - b.clockIn);
+    let dayTotalMs = 0;
+    sessions.forEach(s => {
+      const ms = s.clockOut - s.clockIn;
+      dayTotalMs += ms;
+      rows.push([dateKey, s.store || '', formatClockTime(s.clockIn), formatClockTime(s.clockOut), formatHM(ms), (ms / 3600000).toFixed(2)]);
+    });
+    rows.push([dateKey, 'TOTAL', '', '', formatHM(dayTotalMs), (dayTotalMs / 3600000).toFixed(2)]);
+  });
+  const csv = rows.map(r => r.map(csvField).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `walter-timesheet-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
@@ -932,6 +1112,7 @@ function escapeHtml(str) {
 
 backBtn.addEventListener('click', () => {
   currentProjectId = null;
+  showingTimesheet = false;
   render();
 });
 
@@ -1015,7 +1196,7 @@ document.getElementById('saveItemBtn').addEventListener('click', () => {
 });
 
 // close sheets by tapping the dark overlay background
-[projectOverlay, itemOverlay, document.getElementById('clockSummaryOverlay')].forEach(ov => {
+[projectOverlay, itemOverlay, clockInOverlay, document.getElementById('clockSummaryOverlay')].forEach(ov => {
   ov.addEventListener('click', (e) => {
     if (e.target === ov) ov.classList.add('hidden');
   });

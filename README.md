@@ -21,10 +21,16 @@ When you open the app you'll see four tabs across the top, one per store: **#302
 
 There's a **Clock In** button top-right of the screen, on every page.
 
-- Tap it to start a timer — it turns into a running clock (e.g. `00:14:32`) right there in the header.
+- Tap it, pick which store you're at, and tap **Start** — it turns into a running clock (e.g. `00:14:32`) right there in the header.
 - Tap the running clock to clock out. It'll ask you to confirm.
-- Once you confirm, you'll see the total time you were clocked in, plus a quick list of which projects you opened during that session and how many materials you logged for each.
+- Once you confirm, you'll see the store, the total time you were clocked in, plus a quick list of which projects you opened during that session and how many materials you logged for each.
 - The timer keeps running even if you lock your phone or close Safari and come back later — it's based on the actual clock time, not how long the app stayed open.
+
+## Timesheet
+
+Tap **Timesheet** (top of the dashboard) to see every clock-in session grouped by day, with the store and hours for each one and a total for the day.
+
+- Tap **Export to Excel** to save a spreadsheet file with every session and each day's total hours already added up. Safari will offer to save it to Files or share it — open it directly in Excel (or Numbers, Google Sheets, etc.).
 
 ## Inside a project
 
@@ -39,7 +45,7 @@ Tap any project to open it.
 
 Tap **Backup** (top of the dashboard) to save a copy of everything to a file — Safari will offer to save it to Files or share it. Keep that file somewhere safe (email it to yourself, save it in Files).
 
-If you ever lose your data (new phone, cleared Safari data, etc.), tap **Restore** and pick that backup file. It'll ask you to confirm before replacing what's currently on the phone.
+If you ever lose your data (new phone, cleared Safari data, etc.), tap **Restore** and pick that backup file. It'll ask you to confirm before replacing what's currently on the phone. The backup includes your projects and your timesheet history.
 
 ## Good to know
 
