@@ -471,6 +471,8 @@
   </div>
 </div>
 
+<input type="file" id="restoreFileInput" accept="application/json,.json" style="display:none">
+
 <script>
 const STORAGE_KEY = 'walter_budget_projects_v1';
 const ACTIVE_STORE_KEY = 'walter_budget_active_store_v1';
@@ -726,6 +728,10 @@ function renderProjectsList() {
     </div>`;
 
   projectsView.innerHTML = `
+    <div class="toolbar">
+      <button class="icon-btn" id="backupBtn">Backup</button>
+      <button class="icon-btn" id="restoreBtn">Restore</button>
+    </div>
     <div class="tabs">${allStores.map(store => `<button class="tab${store === activeStore ? ' active' : ''}" data-store="${escapeHtml(store)}">${escapeHtml(store)}${activeCounts[store] ? `<span class="tab-count">${activeCounts[store]}</span>` : ''}</button>`).join('')}</div>
     <div class="store-panel-header">
       <span class="store-total">${money(storeTotal)}</span>
@@ -744,6 +750,9 @@ function renderProjectsList() {
       }
     });
   }
+
+  document.getElementById('backupBtn').addEventListener('click', exportBackup);
+  document.getElementById('restoreBtn').addEventListener('click', () => restoreFileInput.click());
 
   projectsView.querySelectorAll('.tab').forEach(el => {
     el.addEventListener('click', () => {
@@ -861,6 +870,59 @@ function renderProjectDetail() {
     });
   }
 }
+
+// ---- Backup & restore ----
+const restoreFileInput = document.getElementById('restoreFileInput');
+function exportBackup() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    projects,
+    activeStore
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `walter-budget-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function importBackupFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try {
+      data = JSON.parse(reader.result);
+    } catch (e) {
+      alert("That file couldn't be read. Make sure it's a Walter's Budget backup file.");
+      return;
+    }
+    if (!data || !Array.isArray(data.projects)) {
+      alert("That file couldn't be read. Make sure it's a Walter's Budget backup file.");
+      return;
+    }
+    if (!confirm('This will replace all current projects with the backup. Continue?')) return;
+    projects = data.projects;
+    saveProjects(projects);
+    if (data.activeStore) {
+      activeStore = data.activeStore;
+      saveActiveStore(activeStore);
+    }
+    currentProjectId = null;
+    render();
+    alert('Backup restored.');
+  };
+  reader.readAsText(file);
+}
+restoreFileInput.addEventListener('change', () => {
+  const file = restoreFileInput.files[0];
+  if (file) importBackupFile(file);
+  restoreFileInput.value = '';
+});
 
 function escapeHtml(str) {
   const div = document.createElement('div');

@@ -35,9 +35,15 @@ Tap any project to open it.
 - The **×** deletes a material. **Delete this project** at the bottom removes the whole job.
 - **Mark as finished** moves the project out of that store's active list. It's still there, just tucked into the **Finished projects** dropdown at the bottom of the store tab — tap the dropdown and pick it to open it again. A finished project's cost no longer counts toward the store's total. Open it and tap **Reopen project** if you need to put it back on the active list.
 
+## Backing up your data
+
+Tap **Backup** (top of the dashboard) to save a copy of everything to a file — Safari will offer to save it to Files or share it. Keep that file somewhere safe (email it to yourself, save it in Files).
+
+If you ever lose your data (new phone, cleared Safari data, etc.), tap **Restore** and pick that backup file. It'll ask you to confirm before replacing what's currently on the phone.
+
 ## Good to know
 
 - The app works with **no signal** — you can use it in a walk-in cooler with zero bars.
 - All your data is saved **only on this phone**, inside Safari. There's no cloud account and nothing syncs anywhere.
-- Don't clear Safari's website data/history for this app, or your projects will be erased with no way to get them back.
-- If you switch to a new phone, this data won't transfer automatically — there's currently no backup or export.
+- Don't clear Safari's website data/history for this app, or your projects will be erased — unless you've made a backup (see above).
+- If you switch to a new phone, use **Backup** on the old phone and **Restore** on the new one to bring your data over.
